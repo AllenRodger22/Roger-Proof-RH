@@ -4,8 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import datetime
 import json
-import math
+import shutil
 from pathlib import Path
 from typing import Callable, Iterable, Literal, Sequence
 
@@ -90,7 +91,36 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--spacing-count", type=int, default=200, help="Number of eigenvalues used for spacing stats")
     parser.add_argument("--eigen-mode", choices=["log", "cayley"], default="log")
     parser.add_argument("--output-dir", type=Path, default=Path("artifacts"))
+    parser.add_argument(
+        "--run-name",
+        type=str,
+        default=None,
+        help=(
+            "Name of the subdirectory used for this run. When omitted a timestamped"
+            " folder is created."
+        ),
+    )
+    parser.add_argument(
+        "--reset-output",
+        action="store_true",
+        help="Remove the entire output directory before writing new results.",
+    )
     return parser.parse_args()
+
+
+def _prepare_run_directory(base_dir: Path, run_name: str | None, reset: bool) -> Path:
+    if reset and base_dir.exists():
+        shutil.rmtree(base_dir)
+
+    base_dir.mkdir(parents=True, exist_ok=True)
+
+    if run_name is None:
+        timestamp = datetime.datetime.now(tz=datetime.timezone.utc).strftime("%Y%m%d-%H%M%S")
+        run_name = f"run_{timestamp}"
+
+    run_dir = base_dir / run_name
+    run_dir.mkdir(parents=True, exist_ok=True)
+    return run_dir
 
 
 def _ensure_unitarity(U: np.ndarray) -> float:
@@ -234,7 +264,7 @@ def _plot_delta_vs_n(delta: np.ndarray, output: Path) -> None:
 
 def main() -> None:
     args = _parse_args()
-    output_dir = args.output_dir
+    run_dir = _prepare_run_directory(args.output_dir, args.run_name, args.reset_output)
 
     params = {
         "mode": args.mode,
@@ -249,6 +279,10 @@ def main() -> None:
         "m": args.m,
         "spacing_count": args.spacing_count,
         "eigen_mode": args.eigen_mode,
+        "output_root": str(args.output_dir),
+        "run_directory": str(run_dir),
+        "run_name": run_dir.name,
+        "reset_output": args.reset_output,
     }
 
     unitary = construct_unitary(
@@ -263,24 +297,25 @@ def main() -> None:
     )
 
     norm = _ensure_unitarity(unitary.matrix)
-    save_unitarity_report(output_dir / "logs" / "unitarity_check.txt", norm)
-    save_params(output_dir / "logs" / "params.json", params)
+    save_unitarity_report(run_dir / "logs" / "unitarity_check.txt", norm)
+    save_params(run_dir / "logs" / "params.json", params)
 
     spectrum = eigenvalues_from_unitary(unitary.matrix, mode=args.eigen_mode)
     comparison = compare_spectrum(spectrum.eigenvalues, args.m)
-    save_level2_table(comparison, output_dir / "tables" / f"level2_m{comparison.m}.csv")
+    save_level2_table(comparison, run_dir / "tables" / f"level2_m{comparison.m}.csv")
 
     spacing_stats = spacing_statistics(spectrum.eigenvalues, args.spacing_count)
 
-    _plot_spacing_histogram(spacing_stats.normalised_gaps, output_dir / "plots" / "hist_spacing.svg")
-    _plot_spacing_ecdf(spacing_stats.normalised_gaps, output_dir / "plots" / "ecdf_spacing.svg")
-    _plot_delta_vs_n(comparison.delta, output_dir / "plots" / "delta_vs_n.svg")
+    _plot_spacing_histogram(spacing_stats.normalised_gaps, run_dir / "plots" / "hist_spacing.svg")
+    _plot_spacing_ecdf(spacing_stats.normalised_gaps, run_dir / "plots" / "ecdf_spacing.svg")
+    _plot_delta_vs_n(comparison.delta, run_dir / "plots" / "delta_vs_n.svg")
 
     summary = {
         "rmse": comparison.rmse,
         "max_abs_error": comparison.max_abs_error,
         "ks_statistic": spacing_stats.ks_statistic,
         "mean_gap_ratio": spacing_stats.mean_gap_ratio,
+        "output_directory": str(run_dir),
     }
     print(json.dumps(summary, indent=2))
 
