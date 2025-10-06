@@ -1,3 +1,4 @@
+
 """Command-line utility to execute the Level-2 Roger-Hamilton pipeline."""
 
 from __future__ import annotations
