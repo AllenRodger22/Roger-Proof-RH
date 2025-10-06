@@ -6,7 +6,6 @@ import csv
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Tuple
 
 import numpy as np
 

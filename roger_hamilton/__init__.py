@@ -9,6 +9,7 @@ from .analysis import (
     spacing_statistics,
     save_level2_table,
 )
+from .refinement import refine_pipeline, save_refinement_summary
 
 __all__ = [
     "first_primes",
@@ -19,4 +20,6 @@ __all__ = [
     "compare_spectrum",
     "spacing_statistics",
     "save_level2_table",
+    "refine_pipeline",
+    "save_refinement_summary",
 ]
